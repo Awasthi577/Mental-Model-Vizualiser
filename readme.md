@@ -3,6 +3,9 @@
 This project is a Three.js-based 3D model viewer that loads multiple 3D models (from URLs) and displays them in a mosaic grid with individual animations. It also includes UI links to help you understand how the code works.
 
 ---
+## Preview 
+
+[![Mental 3D Model Viewer Preview](https://img.youtube.com/vi/OAhQ3N0sRfc/0.jpg)](https://youtu.be/OAhQ3N0sRfc)
 
 ##  Features
 - Loads 3D models from provided URLs (GLTF/GLB format).
