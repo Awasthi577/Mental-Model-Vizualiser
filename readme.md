@@ -1,95 +1,138 @@
-# Mental 3D Model Viewer
+# Axion – A System for Better Thinking
 
-This project is a Three.js-based 3D model viewer that loads multiple 3D models (from URLs) and displays them in a mosaic grid with individual animations. It also includes UI links to help you understand how the code works.
-
----
-## Preview Video
-
-[![Project Demo](https://github.com/Awasthi577/Mental-Model-Vizualiser/blob/Assets/Project_Image.jpg?raw=true)](https://drive.google.com/file/d/1c3OBX_9XWEUQksPAMaMNF4Ha2lOLWhJ4/view?usp=sharing)
-
-
-##  Features
-- Loads 3D models from provided URLs (GLTF/GLB format).
-- Displays models in a mosaic-like grid layout.
-- Assigns **unique animations** to each model (no more same-animation issue).
-- Clickable UI links to learn about Three.js and model loading.
-- Uses placeholder images for thumbnails.
+Axion is an interactive, browser-based application designed to help you understand and apply powerful mental models and cognitive biases. It uses interactive 3D visualizations and AI-powered examples to create a hands-on learning experience.
 
 ---
 
-## Installation
-1. Clone this repository or copy the files into a folder.
-2. Make sure you have a local server to run it (Three.js requires files to be served via HTTP, not opened directly in the browser).
-   - You can quickly run one using:
-     ```bash
-     # Python 3
-     python -m http.server 8000
-     
-     # Node.js
-     npx http-server .
-     ```
-3. Open `index.html` in your browser via the local server.
+## Preview
+A brief demonstration of the interactive features in Axion.
+
+[▶ Watch the Preview Video](https://drive.google.com/file/d/1kAx4vTDKnkxprU3JUIylP7abMbOaCZOJ/view?usp=sharing)
+
+A brief demonstration of the interactive features in Axion.
+---
+
+## Features
+
+- **Interactive 3D Visualizations**: Explore concepts like *Inversion*, *Sunk Cost Fallacy*, and more with hands-on 3D models.  
+- **AI-Powered Examples**: Use the “Ask Axion” feature (powered by the Gemini API) to get unlimited, context-specific examples for any model.  
+- **Dynamic Reflection System**: Receive new journaling prompts each time you visit a concept and keep a history of your thoughts.  
+- **360° View & Zoom**: All visualizations include full camera controls (drag to rotate, scroll to zoom).  
+- **Self-Contained**: Runs entirely in the browser from a single HTML file. No installation or dependencies are required.  
+- **Responsive Design**: Works on desktop and mobile devices.
 
 ---
 
-##  How It Works
-1. **Scene Setup** – Creates a Three.js scene, camera, and renderer.
-2. **Model Loading** – Uses `GLTFLoader` to fetch models from URLs.
-3. **Mosaic Layout** – Each model is placed in a grid using an X/Z offset.
-4. **Unique Animations** – Each model gets a slightly different rotation speed or animation clip to avoid identical movements.
-5. **UI Links** – Helpful links are placed on the page to guide new developers.
+## Installation & Running
+
+1. **Download** the `axion.html` file to your local machine.  
+2. **Open in Browser**: Double-click the file to open in Chrome, Firefox, Safari, or Edge.  
+
+That’s it! The application runs entirely locally.
 
 ---
 
-### Loading models with unique animations
+## How It Works
 
-This code iterates through `modelData` to load 3D models and add them to the scene. Each model is positioned in a grid and assigned a unique rotation speed for its animation.
+The logic is contained within a single `<script>` tag in the HTML file.
+
+### Content Storage
+- **`mosaicData` Object**: Contains all mental models and cognitive biases, each with definition, application, and reflection questions.
+
+### Rendering Engine
+- `renderMosaic()` dynamically creates the HTML for each category/tile.
+
+### Modal Management
+- `openModal()` and `closeModal()` handle detailed tile views.  
+- `switchTab()` changes the active tab inside the modal.
+
+### Visualization Engine
+- `initVisualization()` creates a new **Three.js** scene, camera, and renderer.  
+- Uses a **`ResizeObserver`** to fix the blank-canvas issue when rendering in hidden tabs.  
+- Individual setup functions (e.g., `setupInversionVisual()`) define object creation and interactivity.  
+- `addGenericControls()` provides drag-rotate and zoom controls.
+
+---
+
+### Core Visualization Logic
 
 ```javascript
-modelData.forEach((model, i) => {
-  loader.load(model.url, gltf => {
-    const obj = gltf.scene;
+function initVisualization(tileId) {
+    destroyVisualization(); 
+    
+    const mount = document.getElementById('visual-container');
+    if (!mount) return;
 
-    // Position models in a 5x grid
-    obj.position.set((i % 5) * 5, 0, Math.floor(i / 5) * 5);
-    scene.add(obj);
+    // ... scene, camera, renderer setup ...
 
-    // Give each model a unique, random rotation speed
-    const speed = 0.005 + Math.random() * 0.01;
-    animations.push(() => {
-      obj.rotation.y += speed;
+    const vizInstance = setupFunction(scene, camera, renderer, controlsContainer, mount);
+
+    let animationFrameId;
+    function animate() {
+        animationFrameId = requestAnimationFrame(animate);
+        if (vizInstance && typeof vizInstance.update === 'function') {
+            vizInstance.update();
+        }
+        renderer.render(scene, camera);
+    }
+    animate();
+
+    const resizeObserver = new ResizeObserver(() => {
+        const width = mount.clientWidth;
+        const height = mount.clientHeight;
+        camera.aspect = width / height;
+        camera.updateProjectionMatrix();
+        renderer.setSize(width, height);
     });
-  });
-});
+    resizeObserver.observe(mount);
+
+    activeVisualization = {
+        destroy: () => {
+            cancelAnimationFrame(animationFrameId);
+            resizeObserver.disconnect();
+            // cleanup logic...
+        }
+    };
+}
 ```
 
-## Model & Image URLs
+### Customizing Content
 
-Edit the `modelData` array in `script.js` to add or change models:
-```javascript
-const modelData = [
-  {
-    url: "https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/Duck/glTF/Duck.gltf",
-    thumbnail: "https://threejs.org/examples/models/gltf/Duck/screenshot/screenshot.jpg"
-  },
-  {
-    url: "https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/BrainStem/glTF/BrainStem.gltf",
-    thumbnail: "https://threejs.org/examples/models/gltf/BrainStem/screenshot/screenshot.jpg"
-  },
-  {
-    url: "https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/Avocado/glTF/Avocado.gltf",
-    thumbnail: "https://threejs.org/examples/models/gltf/Avocado/screenshot/screenshot.jpg"
-  }
-];
+One modify the mosaicData array to adding their own models:
 
 ```
-## Running the Project
+{
+    id: "your-unique-id",
+    hasVisual: true,
+    title: "Your New Model",
+    definition: "A clear and concise definition of the concept.",
+    application: "A real-world example of the concept in action.",
+    reflections: [
+        "A good first reflection question.",
+        "A second question.",
+        "A third question."
+    ]
+}
+```
 
-1. Start your local server.
+### Future Development
 
-2. Open http://localhost:8000.
+1. Connecting tiles to form a “latticework” of mental models.
 
-3. You should see multiple 3D models arranged in a grid, each spinning at a unique speed.
+2. User accounts & cloud sync.
 
+3. Custom tiles and notes.
+
+4. Community-shared mosaics.
+
+### Acknowledgments
+
+1. Three.js
+
+2. Tailwind CSS
+
+3. Lucide Icons
+
+4. Google Gemini API
 
 
