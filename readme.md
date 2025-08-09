@@ -5,7 +5,7 @@ This project is a Three.js-based 3D model viewer that loads multiple 3D models (
 ---
 ## Preview Video
 
-[![Project Demo](https://github.com/Awasthi577/Mental-Model-Vizualiser/blob/Assets/Project_Image.jpg?raw=true)](https://youtu.be/OAhQ3N0sRfc)
+[![Project Demo](https://github.com/Awasthi577/Mental-Model-Vizualiser/blob/Assets/Project_Image.jpg?raw=true)](https://drive.google.com/file/d/1c3OBX_9XWEUQksPAMaMNF4Ha2lOLWhJ4/view?usp=sharing)
 
 
 ##  Features
