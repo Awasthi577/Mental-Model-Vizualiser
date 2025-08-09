@@ -1,0 +1,1209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mosaic: A System for Better Thinking</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f8fafc; /* slate-50 */
+        }
+        .mosaic-tile {
+            transition: all 0.2s ease-in-out;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+        }
+        .mosaic-tile:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+        }
+        .modal-backdrop {
+            background-color: rgba(0,0,0,0.5);
+            transition: opacity 0.3s ease;
+        }
+        .modal-content {
+            transition: transform 0.3s ease;
+        }
+        .sparkle {
+            animation: sparkle-animation 1.5s ease-in-out forwards;
+            box-shadow: 0 0 15px 5px #fde047; /* yellow-300 */
+        }
+        @keyframes sparkle-animation {
+            0% { box-shadow: 0 0 0 0 rgba(253, 224, 71, 0.7); }
+            50% { box-shadow: 0 0 20px 10px rgba(253, 224, 71, 0.3); }
+            100% { box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1); }
+        }
+        #visual-container {
+            width: 100%;
+            height: 400px;
+            background-color: #0f172a; /* slate-900 */
+            border-radius: 0.5rem;
+            position: relative;
+            cursor: grab;
+        }
+        #visual-container:active {
+            cursor: grabbing;
+        }
+        #visual-canvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+        .loader {
+            width: 24px;
+            height: 24px;
+            border: 3px solid #FFF;
+            border-bottom-color: transparent;
+            border-radius: 50%;
+            display: inline-block;
+            box-sizing: border-box;
+            animation: rotation 1s linear infinite;
+        }
+        @keyframes rotation {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        @keyframes flash-red {
+            0%, 100% { background-color: #0f172a; }
+            50% { background-color: #7f1d1d; }
+        }
+        .failure-flash {
+            animation: flash-red 0.5s ease-in-out;
+        }
+        .cuboid-btn {
+            background-color: #475569;
+            border: 1px solid #64748b;
+            border-bottom: 4px solid #1e293b;
+            color: white;
+            padding: 8px;
+            border-radius: 6px;
+            transition: all 0.1s ease-in-out;
+            text-align: left;
+        }
+        .cuboid-btn:hover {
+            background-color: #64748b;
+        }
+        .cuboid-btn:active {
+            transform: translateY(2px);
+            border-bottom-width: 2px;
+        }
+    </style>
+</head>
+<body class="text-slate-800">
+
+    <!-- Main App Container -->
+    <div id="app" class="min-h-screen">
+        <!-- Header -->
+        <header class="bg-white/80 backdrop-blur-lg sticky top-0 z-20 border-b border-slate-200">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="flex items-center justify-between h-16">
+                    <div class="flex items-center">
+                        <svg width="32" height="32" viewBox="0 0 100 100" class="text-slate-800">
+                            <rect width="45" height="45" x="0" y="0" fill="currentColor" class="text-sky-500"></rect>
+                            <rect width="45" height="45" x="55" y="0" fill="currentColor" class="text-slate-400"></rect>
+                            <rect width="45" height="45" x="0" y="55" fill="currentColor" class="text-slate-400"></rect>
+                            <rect width="45" height="45" x="55" y="55" fill="currentColor" class="text-amber-500"></rect>
+                        </svg>
+                        <span class="ml-3 text-2xl font-bold tracking-tight">Mosaic</span>
+                    </div>
+                    <div class="flex items-center space-x-4">
+                        <div class="relative hidden md:block">
+                            <i data-lucide="search" class="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400"></i>
+                            <input type="text" id="search-input" placeholder="Search your mosaic..." class="w-64 pl-10 pr-4 py-2 bg-slate-100 border border-transparent rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500 focus:bg-white">
+                        </div>
+                        <button id="daily-spark-btn" class="flex items-center space-x-2 px-4 py-2 bg-amber-400 text-amber-900 font-semibold rounded-lg hover:bg-amber-500 transition">
+                            <i data-lucide="sparkles" class="w-5 h-5"></i>
+                            <span class="hidden sm:inline">Daily Spark</span>
+                        </button>
+                    </div>
+                </div>
+                 <div class="relative md:hidden pb-4">
+                    <i data-lucide="search" class="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400"></i>
+                    <input type="text" id="search-input-mobile" placeholder="Search your mosaic..." class="w-full pl-10 pr-4 py-2 bg-slate-100 border border-transparent rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500 focus:bg-white">
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <div id="mosaic-canvas" class="space-y-12">
+                <!-- Categories will be rendered here by JS -->
+            </div>
+            <div id="no-results" class="hidden text-center py-16">
+                <i data-lucide="search-x" class="w-16 h-16 mx-auto text-slate-400"></i>
+                <h3 class="mt-4 text-xl font-semibold text-slate-600">No Tiles Found</h3>
+                <p class="mt-2 text-slate-500">Try adjusting your search query.</p>
+            </div>
+        </main>
+    </div>
+
+    <!-- Modal for Knowledge Tile -->
+    <div id="tile-modal" class="fixed inset-0 z-50 flex items-center justify-center p-4 modal-backdrop hidden opacity-0">
+        <div id="modal-content" class="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col transform scale-95">
+            <!-- Modal Header -->
+            <div class="flex items-center justify-between p-6 border-b border-slate-200 flex-shrink-0">
+                <h2 id="modal-title" class="text-2xl font-bold"></h2>
+                <button id="close-modal-btn" class="p-2 rounded-full hover:bg-slate-100">
+                    <i data-lucide="x" class="w-6 h-6 text-slate-600"></i>
+                </button>
+            </div>
+            <!-- Modal Body -->
+            <div class="flex-grow overflow-y-auto">
+                <!-- Tabs -->
+                <div class="border-b border-slate-200">
+                    <nav class="flex space-x-1 px-6" aria-label="Tabs">
+                        <button data-tab="visualize" class="tab-btn hidden px-3 py-4 font-medium text-sm border-b-2">Visualize</button>
+                        <button data-tab="definition" class="tab-btn px-3 py-4 font-medium text-sm border-b-2">Definition</button>
+                        <button data-tab="application" class="tab-btn px-3 py-4 font-medium text-sm border-b-2">Application</button>
+                        <button data-tab="reflection" class="tab-btn px-3 py-4 font-medium text-sm border-b-2">Reflection</button>
+                    </nav>
+                </div>
+                <!-- Tab Content -->
+                <div class="p-6 md:p-8">
+                    <div id="tab-content-visualize" class="tab-content hidden">
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                            <div class="md:col-span-2" id="visual-container">
+                                <!-- Three.js canvas will be appended here -->
+                            </div>
+                            <div id="visual-controls" class="space-y-4">
+                                <!-- Interactive controls will be injected here -->
+                            </div>
+                        </div>
+                    </div>
+                    <div id="tab-content-definition" class="tab-content hidden space-y-4 leading-relaxed"></div>
+                    <div id="tab-content-application" class="tab-content hidden space-y-4 leading-relaxed"></div>
+                    <div id="tab-content-reflection" class="tab-content hidden space-y-4">
+                        <p id="reflection-prompt" class="italic text-slate-600 bg-slate-100 p-4 rounded-lg"></p>
+                        <textarea id="reflection-textarea" rows="8" class="w-full p-4 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500" placeholder="Record your thoughts here... Your notes are saved automatically."></textarea>
+                        <div class="mt-4">
+                            <button id="history-btn" class="text-sm text-sky-600 hover:underline">Show History</button>
+                        </div>
+                        <div id="reflection-history" class="mt-4 border-t pt-4 space-y-4 hidden">
+                           <!-- History will be populated here -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- DATA ---
+        const mosaicData = [
+            {
+                category: "Mental Models",
+                color: "sky",
+                tiles: [
+                    {
+                        id: "inversion", hasVisual: true, title: "Inversion",
+                        definition: "Inversion is the practice of thinking about a problem in reverse. Instead of thinking about how to achieve a goal, you consider what you would do to guarantee failure. By avoiding those pitfalls, you clear the path to success.",
+                        application: "A project manager wants to ensure a product launch is successful. Instead of listing 'steps to success,' they use inversion and ask, 'What would guarantee this launch fails?' The team lists things like 'poor communication,' 'untested code,' 'no marketing plan,' and 'ignoring customer feedback.' They then create specific plans to prevent each of these failure points.",
+                        reflections: [
+                            "What is one important goal you have, and what are all the things that could guarantee you *don't* achieve it?",
+                            "Think about a common piece of advice you've received. What would happen if you did the exact opposite?",
+                            "To improve a relationship (personal or professional), what behaviors would you absolutely have to avoid?"
+                        ]
+                    },
+                    {
+                        id: "second-order", hasVisual: true, title: "Second-Order Thinking",
+                        definition: "First-order thinking is fast and easy. It looks for the immediate consequence of an action. Second-order thinking is deeper and more deliberate. It asks, 'And then what?' It explores the consequences of the consequences.",
+                        application: "A city decides to build a new highway to reduce traffic (first-order effect). However, the new highway makes commuting easier, encouraging more people to move to the suburbs and drive, eventually leading to even worse traffic than before (second-order effect).",
+                        reflections: [
+                            "Consider a decision you're about to make. What might be the result of that result in 10 minutes, 10 months, and 10 years?",
+                            "What is a recent decision you made where the second-order effects were surprising?",
+                            "How might a seemingly 'small' daily habit (like checking your phone first thing) have large, long-term consequences?"
+                        ]
+                    },
+                    {
+                        id: "pareto-principle", hasVisual: true, title: "Pareto Principle (80/20 Rule)",
+                        definition: "The Pareto Principle states that for many outcomes, roughly 80% of consequences come from 20% of the causes. It's a rule of thumb for identifying the most important inputs.",
+                        application: "A software company finds that 80% of user complaints come from just 20% of its software bugs. By focusing their efforts on fixing that critical 20% of bugs, they can achieve the greatest improvement in customer satisfaction with the least amount of work.",
+                        reflections: [
+                            "In your work or life, what are the 20% of activities that are generating 80% of your desired results? How can you do more of them?",
+                            "Conversely, what are the 20% of activities causing 80% of your problems? How can you eliminate them?",
+                            "Look at your to-do list. Which one or two items, if completed, would make the rest easier or irrelevant?"
+                        ]
+                    },
+                    {
+                        id: "first-principles", hasVisual: true, title: "First-Principles Thinking",
+                        definition: "This is the practice of breaking down a complex problem into its most basic, fundamental truths and reasoning up from there. It's about questioning every assumption you think you 'know' about a problem.",
+                        application: "Elon Musk used this to build SpaceX. Instead of accepting that rockets are expensive, he asked, 'What are rockets made of?' He found the raw materials (aluminum, copper, etc.) were only 2% of the total cost. The real cost was in the manufacturing process. By reasoning from first principles, he could build rockets far more cheaply.",
+                        reflections: [
+                            "Think of a common 'truth' or assumption in your industry or personal life. What are its fundamental components if you break it all the way down?",
+                            "What is something you believe is 'impossible'? What are the core scientific or physical laws that make it so, versus just convention?",
+                            "Describe a complex goal you have. What are the absolute, undeniable truths about what it takes to achieve it?"
+                        ]
+                    }
+                ]
+            },
+            {
+                category: "Cognitive Biases",
+                color: "amber",
+                tiles: [
+                    {
+                        id: "survivorship-bias", hasVisual: true, title: "Survivorship Bias",
+                        definition: "A logical error of concentrating on the people or things that 'survived' some process and inadvertently overlooking those that did not because of their lack of visibility.",
+                        application: "We study the habits of college-dropout billionaires like Bill Gates and Mark Zuckerberg, thinking their path is a blueprint for success. We ignore the thousands of other college dropouts who did not become billionaires, leading to a skewed perception of the odds.",
+                        reflections: [
+                            "When you look at successful people or projects for inspiration, what are the 'non-survivors' you might be failing to see?",
+                            "Think about a popular success story. What silent failures might that story be hiding?",
+                            "How can you find data not just on what worked, but also on what didn't work, for a goal you have?"
+                        ]
+                    },
+                    {
+                        id: "confirmation-bias", hasVisual: true, title: "Confirmation Bias",
+                        definition: "The tendency to search for, interpret, favor, and recall information in a way that confirms or supports one's preexisting beliefs or hypotheses.",
+                        application: "An investor who is bullish on a particular stock will tend to read news articles that support their view while dismissing or ignoring articles that are critical of the company. This reinforces their belief, even if it's wrong.",
+                        reflections: [
+                            "What is a strong belief you hold? How could you actively seek out information that *disproves* it?",
+                            "Describe a time you changed your mind about something important. What caused the change?",
+                            "Who is someone you respect that holds an opposing view to you on a topic? Can you argue their position compellingly?"
+                        ]
+                    },
+                    {
+                        id: "sunk-cost-fallacy", hasVisual: true, title: "Sunk Cost Fallacy",
+                        definition: "The tendency to continue an endeavor if an investment in money, effort, or time has already been made, even when it's clear that the costs are no longer recoverable and the endeavor is failing.",
+                        application: "Someone continues to pour money into repairing an old, unreliable car because they've 'already spent so much on it.' A rational decision would be to assess the future costs and benefits, ignoring the past 'sunk' costs.",
+                        reflections: [
+                            "Is there a project, commitment, or investment you're sticking with primarily because of what you've already put into it?",
+                            "If you were starting from scratch today, would you make the same commitment?",
+                            "Imagine a friend was in your exact situation. What advice would you give them?"
+                        ]
+                    },
+                    {
+                        id: "anchoring-bias", hasVisual: false, title: "Anchoring Bias",
+                        definition: "The tendency to rely too heavily on the first piece of information offered (the 'anchor') when making decisions. Subsequent judgments are often made by adjusting away from that anchor.",
+                        application: "A car salesman first shows you a luxury model for $80,000. Every car after that, even one for $40,000, seems cheap in comparison, even if $40,000 is more than you initially planned to spend. The first price set the anchor.",
+                        reflections: [
+                            "Think about a recent negotiation or purchase. What was the first number you heard, and how might it have influenced your final decision?",
+                            "How can you introduce a new 'anchor' in a negotiation to shift the perspective?",
+                            "Where in your life might an initial piece of information be limiting your view of the possibilities?"
+                        ]
+                    }
+                ]
+            }
+        ];
+
+        // --- DOM ELEMENTS & STATE ---
+        const canvas = document.getElementById('mosaic-canvas');
+        const modal = document.getElementById('tile-modal');
+        const modalContent = document.getElementById('modal-content');
+        const closeModalBtn = document.getElementById('close-modal-btn');
+        const searchInput = document.getElementById('search-input');
+        const searchInputMobile = document.getElementById('search-input-mobile');
+        const noResultsDiv = document.getElementById('no-results');
+        const dailySparkBtn = document.getElementById('daily-spark-btn');
+        
+        let currentTileId = null;
+        let activeVisualization = null;
+
+        // --- FUNCTIONS ---
+
+        function renderMosaic(data) {
+            canvas.innerHTML = '';
+            data.forEach(category => {
+                const categorySection = document.createElement('section');
+                categorySection.id = `category-${category.category.replace(/\s+/g, '-').toLowerCase()}`;
+                
+                const categoryHeader = document.createElement('div');
+                categoryHeader.className = 'flex items-center mb-4';
+                categoryHeader.innerHTML = `<div class="w-3 h-3 rounded-full bg-${category.color}-500 mr-3"></div><h2 class="text-2xl font-bold text-slate-900">${category.category}</h2>`;
+                categorySection.appendChild(categoryHeader);
+
+                const grid = document.createElement('div');
+                grid.className = 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6';
+
+                category.tiles.forEach(tile => {
+                    const tileEl = document.createElement('div');
+                    tileEl.className = 'mosaic-tile bg-white p-6 rounded-xl cursor-pointer border border-slate-200';
+                    tileEl.dataset.id = tile.id;
+                    
+                    const reflectionSaved = localStorage.getItem(`mosaic-reflection-${tile.id}-0`) || localStorage.getItem(`mosaic-reflection-${tile.id}-1`) || localStorage.getItem(`mosaic-reflection-${tile.id}-2`);
+                    const icons = [
+                        reflectionSaved ? `<i data-lucide="notebook-pen" class="w-5 h-5 text-slate-500" title="You have a reflection saved."></i>` : '',
+                        tile.hasVisual ? `<i data-lucide="camera" class="w-5 h-5 text-${category.color}-500" title="This tile has a visualization."></i>` : ''
+                    ].filter(Boolean).join('');
+
+                    tileEl.innerHTML = `
+                        <div class="flex justify-between items-start">
+                            <h3 class="text-lg font-bold text-slate-800">${tile.title}</h3>
+                            <div class="flex items-center space-x-2 flex-shrink-0 ml-2">${icons}</div>
+                        </div>
+                        <p class="mt-2 text-slate-500 text-sm line-clamp-3">${tile.definition}</p>
+                    `;
+                    tileEl.addEventListener('click', () => openModal(tile.id));
+                    grid.appendChild(tileEl);
+                });
+
+                categorySection.appendChild(grid);
+                canvas.appendChild(categorySection);
+            });
+            lucide.createIcons();
+        }
+
+        function findTileById(tileId) {
+            for (const category of mosaicData) {
+                const foundTile = category.tiles.find(tile => tile.id === tileId);
+                if (foundTile) return foundTile;
+            }
+            return null;
+        }
+
+        function openModal(tileId) {
+            currentTileId = tileId;
+            const tile = findTileById(tileId);
+            if (!tile) return;
+
+            document.getElementById('modal-title').textContent = tile.title;
+            document.getElementById('tab-content-definition').innerHTML = `<p>${tile.definition}</p>`;
+            
+            // Setup Application Tab with Gemini Integration
+            const appContent = document.getElementById('tab-content-application');
+            appContent.innerHTML = `
+                <p>${tile.application}</p>
+                <div class="border-t border-slate-200 mt-6 pt-6">
+                    <h4 class="font-bold text-lg mb-2">Ask for another example</h4>
+                    <p class="text-sm text-slate-500 mb-4">Want a different perspective? Ask Gemini for an example related to a specific field (e.g., "startups", "personal finance", "education").</p>
+                    <div class="flex items-center space-x-2">
+                        <input type="text" id="gemini-prompt-input" class="flex-grow p-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500" placeholder="e.g., in marketing">
+                        <button id="gemini-ask-btn" class="px-4 py-2 bg-sky-500 text-white font-semibold rounded-lg hover:bg-sky-600 transition flex items-center justify-center w-36">
+                            <span class="btn-text">Ask Gemini</span>
+                            <span class="loader hidden"></span>
+                        </button>
+                    </div>
+                    <div id="gemini-response-container" class="mt-4 p-4 bg-slate-100 rounded-lg hidden text-slate-700"></div>
+                </div>
+            `;
+            document.getElementById('gemini-ask-btn').addEventListener('click', getGeminiSuggestion);
+
+            // Reflection Tab Logic
+            const reflectionPrompt = document.getElementById('reflection-prompt');
+            const reflectionTextarea = document.getElementById('reflection-textarea');
+            const historyBtn = document.getElementById('history-btn');
+            const historyContainer = document.getElementById('reflection-history');
+
+            const lastQuestionIndex = parseInt(localStorage.getItem(`mosaic-last-q-${tile.id}`)) || -1;
+            let newQuestionIndex;
+            do {
+                newQuestionIndex = Math.floor(Math.random() * tile.reflections.length);
+            } while (tile.reflections.length > 1 && newQuestionIndex === lastQuestionIndex);
+            
+            localStorage.setItem(`mosaic-last-q-${tile.id}`, newQuestionIndex);
+            
+            reflectionPrompt.textContent = tile.reflections[newQuestionIndex];
+            reflectionTextarea.dataset.questionIndex = newQuestionIndex;
+            reflectionTextarea.value = localStorage.getItem(`mosaic-reflection-${tile.id}-${newQuestionIndex}`) || '';
+            historyContainer.innerHTML = '';
+            historyContainer.classList.add('hidden');
+            historyBtn.textContent = 'Show History';
+
+            historyBtn.onclick = () => {
+                if (historyContainer.classList.contains('hidden')) {
+                    historyContainer.innerHTML = ''; // Clear previous
+                    let hasHistory = false;
+                    tile.reflections.forEach((q, index) => {
+                        const answer = localStorage.getItem(`mosaic-reflection-${tile.id}-${index}`);
+                        if (answer) {
+                            hasHistory = true;
+                            const historyItem = document.createElement('div');
+                            historyItem.className = 'text-sm';
+                            historyItem.innerHTML = `<p class="font-semibold italic text-slate-600">${q}</p><p class="mt-1 text-slate-800 pl-4 border-l-2">${answer.replace(/\n/g, '<br>')}</p>`;
+                            historyContainer.appendChild(historyItem);
+                        }
+                    });
+                    if (!hasHistory) {
+                        historyContainer.innerHTML = `<p class="text-sm text-slate-500">No saved reflections for this tile yet.</p>`;
+                    }
+                    historyContainer.classList.remove('hidden');
+                    historyBtn.textContent = 'Hide History';
+                } else {
+                    historyContainer.classList.add('hidden');
+                    historyBtn.textContent = 'Show History';
+                }
+            };
+
+
+            const vizTabBtn = document.querySelector('[data-tab="visualize"]');
+            if (tile.hasVisual) {
+                vizTabBtn.classList.remove('hidden');
+                switchTab('visualize');
+            } else {
+                vizTabBtn.classList.add('hidden');
+                switchTab('definition');
+            }
+
+            modal.classList.remove('hidden');
+            setTimeout(() => {
+                modal.classList.remove('opacity-0');
+                modalContent.classList.remove('scale-95');
+            }, 10);
+        }
+
+        function closeModal() {
+            modal.classList.add('opacity-0');
+            modalContent.classList.add('scale-95');
+            setTimeout(() => {
+                modal.classList.add('hidden');
+                currentTileId = null;
+                destroyVisualization();
+            }, 300);
+        }
+        
+        function switchTab(tabName) {
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                const isHidden = btn.classList.contains('hidden');
+                if(!isHidden) {
+                    if (btn.dataset.tab === tabName) {
+                        btn.classList.add('border-sky-500', 'text-sky-600');
+                        btn.classList.remove('border-transparent', 'text-slate-500', 'hover:text-slate-700', 'hover:border-slate-300');
+                    } else {
+                        btn.classList.remove('border-sky-500', 'text-sky-600');
+                        btn.classList.add('border-transparent', 'text-slate-500', 'hover:text-slate-700', 'hover:border-slate-300');
+                    }
+                }
+            });
+
+            document.querySelectorAll('.tab-content').forEach(content => {
+                content.classList.toggle('hidden', content.id !== `tab-content-${tabName}`);
+            });
+            
+            if(tabName === 'visualize') {
+                const tile = findTileById(currentTileId);
+                if(tile && tile.hasVisual) initVisualization(tile.id);
+            } else {
+                destroyVisualization();
+            }
+        }
+
+        // --- GEMINI API INTEGRATION ---
+        async function getGeminiSuggestion() {
+            const tile = findTileById(currentTileId);
+            const userInput = document.getElementById('gemini-prompt-input').value;
+            const responseContainer = document.getElementById('gemini-response-container');
+            const askButton = document.getElementById('gemini-ask-btn');
+            const buttonText = askButton.querySelector('.btn-text');
+            const loader = askButton.querySelector('.loader');
+
+            if (!tile) return;
+
+            const prompt = `You are an expert in explaining mental models. For the concept "${tile.title}", provide a clear, concise, real-world application example related to "${userInput || 'a general life situation'}". Start directly with the example.`;
+            
+            buttonText.classList.add('hidden');
+            loader.classList.remove('hidden');
+            askButton.disabled = true;
+
+            try {
+                let chatHistory = [{ role: "user", parts: [{ text: prompt }] }];
+                const payload = { contents: chatHistory };
+                const apiKey = ""; // API key will be provided by the environment
+                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
+                
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!response.ok) {
+                    throw new Error(`API request failed with status ${response.status}`);
+                }
+
+                const result = await response.json();
+                
+                let text = "Sorry, I couldn't generate an example right now. Please try again.";
+                if (result.candidates && result.candidates.length > 0 &&
+                    result.candidates[0].content && result.candidates[0].content.parts &&
+                    result.candidates[0].content.parts.length > 0) {
+                    text = result.candidates[0].content.parts[0].text.replace(/\n/g, '<br>');
+                }
+
+                responseContainer.innerHTML = text;
+                responseContainer.classList.remove('hidden');
+
+            } catch (error) {
+                console.error("Gemini API Error:", error);
+                responseContainer.textContent = "An error occurred. Please check the console and try again.";
+                responseContainer.classList.remove('hidden');
+            } finally {
+                buttonText.classList.remove('hidden');
+                loader.classList.add('hidden');
+                askButton.disabled = false;
+            }
+        }
+
+        // --- VISUALIZATION LOGIC (THREE.JS with ResizeObserver) ---
+
+        function initVisualization(tileId) {
+            destroyVisualization(); 
+            
+            const mount = document.getElementById('visual-container');
+            if (!mount) return;
+
+            const controlsContainer = document.getElementById('visual-controls');
+            controlsContainer.innerHTML = '';
+
+            const scene = new THREE.Scene();
+            const camera = new THREE.PerspectiveCamera(50, mount.clientWidth / mount.clientHeight, 0.1, 1000);
+            const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+            renderer.setPixelRatio(window.devicePixelRatio);
+            renderer.setSize(mount.clientWidth, mount.clientHeight);
+            mount.appendChild(renderer.domElement);
+
+            let setupFunction;
+            switch (tileId) {
+                case 'inversion': setupFunction = setupInversionVisual; break;
+                case 'survivorship-bias': setupFunction = setupSurvivorshipBiasVisual; break;
+                case 'second-order': setupFunction = setupSecondOrderVisual; break;
+                case 'pareto-principle': setupFunction = setupParetoVisual; break;
+                case 'confirmation-bias': setupFunction = setupConfirmationBiasVisual; break;
+                case 'sunk-cost-fallacy': setupFunction = setupSunkCostVisual; break;
+                case 'first-principles': setupFunction = setupFirstPrinciplesVisual; break;
+                default: return;
+            }
+            
+            const vizInstance = setupFunction(scene, camera, renderer, controlsContainer, mount);
+            
+            let animationFrameId;
+            function animate() {
+                animationFrameId = requestAnimationFrame(animate);
+                if (vizInstance && typeof vizInstance.update === 'function') {
+                    vizInstance.update();
+                }
+                renderer.render(scene, camera);
+            }
+            animate();
+
+            const handleResize = () => {
+                if (!mount) return;
+                const width = mount.clientWidth;
+                const height = mount.clientHeight;
+                camera.aspect = width / height;
+                camera.updateProjectionMatrix();
+                renderer.setSize(width, height);
+            };
+
+            const resizeObserver = new ResizeObserver(handleResize);
+            resizeObserver.observe(mount);
+            
+            activeVisualization = {
+                destroy: () => {
+                    cancelAnimationFrame(animationFrameId);
+                    resizeObserver.disconnect();
+                    if (vizInstance && typeof vizInstance.cleanup === 'function') {
+                        vizInstance.cleanup();
+                    }
+                    renderer.dispose();
+                    if(mount.contains(renderer.domElement)) {
+                        mount.removeChild(renderer.domElement);
+                    }
+                }
+            };
+        }
+
+        function destroyVisualization() {
+            if (activeVisualization) {
+                activeVisualization.destroy();
+                activeVisualization = null;
+            }
+        }
+        
+        // --- GENERIC VISUALIZATION CONTROLS ---
+        function addGenericControls(camera, group, mount) {
+             // Mouse rotation
+            let isDragging = false;
+            let previousMousePosition = { x: 0, y: 0 };
+            mount.onmousedown = (e) => { isDragging = true; previousMousePosition = { x: e.clientX, y: e.clientY }; };
+            mount.onmouseup = () => { isDragging = false; };
+            mount.onmouseleave = () => { isDragging = false; };
+            mount.onmousemove = (e) => {
+                if (isDragging) {
+                    const deltaX = e.clientX - previousMousePosition.x;
+                    const deltaY = e.clientY - previousMousePosition.y;
+                    group.rotation.y += deltaX * 0.005;
+                    group.rotation.x += deltaY * 0.005;
+                    previousMousePosition = { x: e.clientX, y: e.clientY };
+                }
+            };
+            // Mouse wheel zoom
+            mount.onwheel = (e) => {
+                e.preventDefault();
+                camera.position.z = Math.max(5, Math.min(20, camera.position.z + e.deltaY * 0.01));
+            };
+        }
+
+        // --- SPECIFIC VISUALIZATION SETUPS ---
+        function setupInversionVisual(scene, camera, renderer, controlsContainer, mount) {
+            camera.position.set(0, 0, 10);
+            const group = new THREE.Group();
+            scene.add(group);
+            addGenericControls(camera, group, mount);
+
+            scene.add(new THREE.AmbientLight(0xffffff, 0.5));
+            const light = new THREE.PointLight(0xffffff, 1);
+            light.position.set(5, 5, 5);
+            scene.add(light);
+
+            const cone = new THREE.Mesh( new THREE.ConeGeometry(2, 4, 32), new THREE.MeshStandardMaterial({ color: 0x8b5cf6, transparent: true, opacity: 0.8 }) );
+            cone.rotation.x = Math.PI;
+            cone.position.y = -2;
+            group.add(cone);
+
+            const orbitPath = new THREE.Mesh( new THREE.TorusGeometry(3.5, 0.02, 16, 100), new THREE.MeshBasicMaterial({ color: 0x67e8f9 }) );
+            orbitPath.rotation.x = Math.PI / 2;
+            group.add(orbitPath);
+
+            const tasks = [];
+            function addTask() {
+                const sphere = new THREE.Mesh( new THREE.SphereGeometry(0.3, 32, 32), new THREE.MeshStandardMaterial({ color: 0xfde047, emissive: 0xfde047, emissiveIntensity: 0.5 }) );
+                const task = {
+                    mesh: sphere,
+                    angle: Math.random() * Math.PI * 2,
+                    speed: 0.005 + Math.random() * 0.01,
+                    radius: 3.5 + (Math.random() - 0.5)
+                };
+                tasks.push(task);
+                group.add(sphere);
+            }
+            addTask();
+
+            controlsContainer.innerHTML = `<h4 class="font-bold text-lg">Interactive Controls</h4><p class="text-sm text-slate-500">Drag to rotate, scroll to zoom. More tasks increase complexity.</p><button id="add-task-btn" class="w-full text-left p-2 rounded hover:bg-slate-100">Add Task</button><button id="pause-btn" class="w-full text-left p-2 rounded hover:bg-slate-100">Pause</button>`;
+            document.getElementById('add-task-btn').onclick = addTask;
+            
+            let paused = false;
+            document.getElementById('pause-btn').onclick = (e) => { paused = !paused; e.target.textContent = paused ? 'Play' : 'Pause'; };
+
+            return {
+                update: () => { 
+                    if (!paused) { 
+                        tasks.forEach(task => {
+                            task.angle += task.speed;
+                            task.mesh.position.x = task.radius * Math.cos(task.angle);
+                            task.mesh.position.z = task.radius * Math.sin(task.angle);
+                        });
+                    } 
+                },
+                cleanup: () => { tasks.forEach(t => { group.remove(t.mesh); t.mesh.geometry.dispose(); t.mesh.material.dispose(); }); }
+            };
+        }
+
+        function setupSurvivorshipBiasVisual(scene, camera, renderer, controlsContainer, mount) {
+            camera.position.set(0, 0, 15);
+            const group = new THREE.Group();
+            scene.add(group);
+            addGenericControls(camera, group, mount);
+            scene.add(new THREE.AmbientLight(0xffffff, 0.8));
+            const particles = [];
+            const survivorMaterial = new THREE.MeshBasicMaterial({ color: 0x22c55e });
+            const failureMaterial = new THREE.MeshBasicMaterial({ color: 0xef4444 });
+            const particleGeom = new THREE.SphereGeometry(0.1, 8, 8);
+            let failuresHidden = false;
+
+            function updateCounts() {
+                const survivors = particles.filter(p => p.isSurvivor).length;
+                const failures = particles.length - survivors;
+                document.getElementById('survivor-count').textContent = survivors;
+                document.getElementById('failure-count').textContent = failures;
+                document.getElementById('total-count').textContent = particles.length;
+            }
+
+            function generateParticles(survivalRate) {
+                particles.forEach(p => group.remove(p));
+                particles.length = 0;
+                for(let i=0; i<200; i++) {
+                    const isSurvivor = Math.random() < survivalRate;
+                    const particle = new THREE.Mesh(particleGeom, isSurvivor ? survivorMaterial : failureMaterial);
+                    particle.position.set((Math.random() - 0.5) * 20, (Math.random() - 0.5) * 10, (Math.random() - 0.5) * 10);
+                    particle.isSurvivor = isSurvivor;
+                    particle.visible = isSurvivor ? true : !failuresHidden;
+                    particles.push(particle);
+                    group.add(particle);
+                }
+                updateCounts();
+            }
+            
+            controlsContainer.innerHTML = `<h4 class="font-bold text-lg">Interactive Controls</h4><p class="text-sm text-slate-500">Drag to rotate, scroll to zoom.</p>
+                <div><label for="survival-slider" class="text-sm font-medium">Survival Rate</label><input type="range" id="survival-slider" min="0.01" max="0.5" step="0.01" value="0.1" class="w-full"></div>
+                <label class="flex items-center space-x-2 cursor-pointer p-2 rounded hover:bg-slate-100">
+                    <input type="checkbox" id="toggle-failures-checkbox" class="h-4 w-4 rounded border-gray-300 text-sky-600 focus:ring-sky-500" checked>
+                    <span>Show Failures</span>
+                </label>
+                <div class="text-sm space-y-1">
+                    <p>Total: <span id="total-count" class="font-semibold">0</span></p>
+                    <p class="text-green-500">Survivors: <span id="survivor-count" class="font-semibold">0</span></p>
+                    <p class="text-red-500">Failures: <span id="failure-count" class="font-semibold">0</span></p>
+                </div>`;
+            document.getElementById('survival-slider').oninput = (e) => generateParticles(parseFloat(e.target.value));
+            document.getElementById('toggle-failures-checkbox').onchange = (e) => {
+                failuresHidden = !e.target.checked;
+                particles.forEach(p => { if (!p.isSurvivor) p.visible = !failuresHidden; });
+            };
+            
+            generateParticles(0.1);
+
+            return { update: () => {}, cleanup: () => { particles.forEach(p => { group.remove(p); p.geometry.dispose(); }); survivorMaterial.dispose(); failureMaterial.dispose(); } };
+        }
+
+        function setupSecondOrderVisual(scene, camera, renderer, controlsContainer, mount) {
+            camera.position.z = 10;
+            const group = new THREE.Group();
+            scene.add(group);
+            addGenericControls(camera, group, mount);
+            let ripples = [], nodes = [], frame = 0, isGloballyFailed = false;
+            
+            const nodeMaterial = new THREE.MeshBasicMaterial({ color: 0x3b82f6 }); // Blue for primary
+            const secondaryNodeMaterial = new THREE.MeshBasicMaterial({ color: 0xfb923c });
+            const failedNodeMaterial = new THREE.MeshBasicMaterial({ color: 0xef4444 });
+
+            function triggerGlobalFailure() {
+                isGloballyFailed = true;
+                document.getElementById('visual-container').classList.add('failure-flash');
+                document.getElementById('failure-message').classList.remove('hidden');
+                 nodes.filter(n => n.isPrimary).forEach(node => node.material = failedNodeMaterial);
+            }
+            
+            function resetSystem() {
+                ripples.forEach(r => group.remove(r));
+                ripples.length = 0;
+                nodes.forEach(n => group.remove(n));
+                nodes.length = 0;
+                frame = 0;
+                isGloballyFailed = false;
+                document.getElementById('visual-container').classList.remove('failure-flash');
+                document.getElementById('failure-message').classList.add('hidden');
+                document.getElementById('action-counter').textContent = '0 / 4';
+            }
+
+            function createRipple(x, y, color, isPrimary = false) {
+                const curve = new THREE.EllipseCurve(x, y, 0.1, 0.1, 0, 2 * Math.PI, false, 0);
+                const points = curve.getPoints(50);
+                const geometry = new THREE.BufferGeometry().setFromPoints(points);
+                const material = new THREE.LineBasicMaterial({ color, transparent: true });
+                const ripple = new THREE.Line(geometry, material);
+                ripple.position.set(x, y, 0);
+                ripple.scale.set(0.1, 0.1, 0.1);
+                ripple.isPrimary = isPrimary;
+                if(isPrimary) ripple.spawnedSecondary = false;
+                ripple.spawnFrame = frame;
+                group.add(ripple);
+                ripples.push(ripple);
+            }
+
+            controlsContainer.innerHTML = `<h4 class="font-bold text-lg">Interactive Controls</h4><p class="text-sm text-slate-500">Click to add an Action (max 4). The system overloads when all 4 actions are taken. Drag to rotate, scroll to zoom.</p>
+                <div><span class="text-sm font-medium">Actions Taken: </span><span id="action-counter">0 / 4</span></div>
+                <p id="failure-message" class="text-red-400 font-bold hidden">System Overload! Reset to continue.</p>
+                <button id="reset-btn" class="w-full text-left p-2 rounded hover:bg-slate-100">Reset</button>`;
+            document.getElementById('reset-btn').onclick = resetSystem;
+            
+            const onCanvasClick = (event) => {
+                const primaryNodes = nodes.filter(n => n.isPrimary);
+                if (isGloballyFailed || primaryNodes.length >= 4) return;
+
+                const rect = mount.getBoundingClientRect();
+                const x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+                const y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+                const mousePos = new THREE.Vector3(x, y, 0.5);
+                mousePos.unproject(camera);
+                
+                const nodeGeom = new THREE.CircleGeometry(0.15, 32);
+                const node = new THREE.Mesh(nodeGeom, nodeMaterial);
+                node.position.set(mousePos.x, mousePos.y, 0);
+                node.isPrimary = true;
+                group.add(node);
+                nodes.push(node);
+                document.getElementById('action-counter').textContent = `${primaryNodes.length + 1} / 4`;
+
+                createRipple(mousePos.x, mousePos.y, 0x3b82f6, true);
+                
+                if (primaryNodes.length + 1 >= 4) {
+                    triggerGlobalFailure();
+                }
+            };
+            mount.addEventListener('click', onCanvasClick);
+
+            return {
+                update: () => {
+                    if (isGloballyFailed) return;
+                    frame++;
+
+                    for (let i = ripples.length - 1; i >= 0; i--) {
+                        const ripple = ripples[i];
+                        const life = frame - ripple.spawnFrame;
+                        const scale = life * 0.05;
+                        ripple.scale.set(scale, scale, scale);
+                        ripple.material.opacity = 1 - (scale / 5);
+                        
+                        if (ripple.isPrimary && life === 40 && !ripple.spawnedSecondary) { 
+                            ripple.spawnedSecondary = true;
+                            const numSecondaries = 16;
+                            for (let j = 0; j < numSecondaries; j++) {
+                                const angle = (j / numSecondaries) * Math.PI * 2;
+                                const radius = 2;
+                                const secondaryX = ripple.position.x + Math.cos(angle) * radius;
+                                const secondaryY = ripple.position.y + Math.sin(angle) * radius;
+                                
+                                const secondaryNodeGeom = new THREE.CircleGeometry(0.1, 32);
+                                const secondaryNode = new THREE.Mesh(secondaryNodeGeom, secondaryNodeMaterial);
+                                secondaryNode.position.set(secondaryX, secondaryY, 0);
+                                secondaryNode.isPrimary = false;
+                                group.add(secondaryNode);
+                                nodes.push(secondaryNode);
+                            }
+                        }
+                        if (ripple.material.opacity <= 0) { group.remove(ripple); ripples.splice(i, 1); }
+                    }
+                },
+                cleanup: () => { 
+                    ripples.forEach(r => { group.remove(r); r.geometry.dispose(); r.material.dispose(); }); 
+                    nodes.forEach(n => { group.remove(n); n.geometry.dispose(); n.material.dispose(); });
+                    nodeMaterial.dispose();
+                    secondaryNodeMaterial.dispose();
+                    failedNodeMaterial.dispose();
+                    mount.removeEventListener('click', onCanvasClick);
+                }
+            };
+        }
+
+        function setupParetoVisual(scene, camera, renderer, controlsContainer, mount) {
+            camera.position.z = 10;
+            const group = new THREE.Group();
+            scene.add(group);
+            addGenericControls(camera, group, mount);
+            const totalItems = 100;
+            const material80 = new THREE.MeshBasicMaterial({ color: 0x94a3b8 });
+            const material20 = new THREE.MeshBasicMaterial({ color: 0xf59e0b });
+            
+            function generateDistribution(criticalFew) {
+                while(group.children.length) {
+                    const child = group.children[0];
+                    group.remove(child);
+                    child.geometry.dispose();
+                    child.material.dispose();
+                }
+                for (let i = 0; i < totalItems; i++) {
+                    const isCritical = i < criticalFew;
+                    const height = isCritical ? 4 : 0.5;
+                    const geometry = new THREE.BoxGeometry(0.5, height, 0.5);
+                    const material = isCritical ? material20 : material80;
+                    const cube = new THREE.Mesh(geometry, material);
+                    cube.position.x = (i - totalItems / 2) * 0.6;
+                    cube.position.y = height / 2 - 2;
+                    group.add(cube);
+                }
+            }
+            
+            controlsContainer.innerHTML = `<h4 class="font-bold text-lg">Interactive Controls</h4><p class="text-sm text-slate-500">See how different effort distributions affect results. Drag to rotate, scroll to zoom.</p>
+                <button data-dist="20" class="dist-btn w-full text-left p-2 rounded bg-slate-200">Focused (20/80)</button>
+                <button data-dist="50" class="dist-btn w-full text-left p-2 rounded hover:bg-slate-100">Scattered (50/50)</button>
+                <button data-dist="80" class="dist-btn w-full text-left p-2 rounded hover:bg-slate-100">Inefficient (80/20)</button>`;
+            
+            document.querySelectorAll('.dist-btn').forEach(btn => {
+                btn.onclick = (e) => {
+                    document.querySelectorAll('.dist-btn').forEach(b => b.classList.remove('bg-slate-200'));
+                    e.target.classList.add('bg-slate-200');
+                    generateDistribution(parseInt(e.target.dataset.dist));
+                }
+            });
+
+            generateDistribution(20);
+
+            return { update: () => {}, cleanup: () => { material80.dispose(); material20.dispose(); } };
+        }
+
+        // --- NEW VISUALIZATIONS ---
+
+        function setupConfirmationBiasVisual(scene, camera, renderer, controlsContainer, mount) {
+            camera.position.z = 15;
+            const group = new THREE.Group();
+            scene.add(group);
+            addGenericControls(camera, group, mount);
+            scene.add(new THREE.AmbientLight(0xffffff, 0.8));
+
+            const belief = new THREE.Mesh(new THREE.SphereGeometry(1, 32, 32), new THREE.MeshStandardMaterial({ color: 0x3b82f6, emissive: 0x3b82f6, emissiveIntensity: 0.3 }));
+            group.add(belief);
+
+            const bubble = new THREE.Mesh(new THREE.SphereGeometry(4, 32, 32), new THREE.MeshStandardMaterial({ color: 0x60a5fa, transparent: true, opacity: 0.2}));
+            bubble.visible = false;
+            group.add(bubble);
+
+            const particles = [];
+            const confirmMaterial = new THREE.MeshBasicMaterial({ color: 0x3b82f6 });
+            const disconfirmMaterial = new THREE.MeshBasicMaterial({ color: 0xef4444 });
+            const particleGeom = new THREE.SphereGeometry(0.1, 8, 8);
+
+            for(let i=0; i<100; i++) {
+                const isConfirming = Math.random() > 0.5;
+                const particle = new THREE.Mesh(particleGeom, isConfirming ? confirmMaterial : disconfirmMaterial);
+                const radius = 5 + Math.random() * 5;
+                const theta = Math.random() * Math.PI * 2;
+                const phi = Math.acos(2 * Math.random() - 1);
+                
+                const startPos = new THREE.Vector3(
+                    radius * Math.sin(phi) * Math.cos(theta),
+                    radius * Math.sin(phi) * Math.sin(theta),
+                    radius * Math.cos(phi)
+                );
+                particle.position.copy(startPos);
+                particle.originalPosition = startPos;
+                particle.isConfirming = isConfirming;
+                particle.velocity = new THREE.Vector3();
+                particles.push(particle);
+                group.add(particle);
+            }
+
+            let biasOn = false;
+            controlsContainer.innerHTML = `<h4 class="font-bold text-lg">Interactive Controls</h4><p class="text-sm text-slate-500">Drag to rotate, scroll to zoom. Toggle the bias to see how it filters evidence.</p>
+                <label class="flex items-center space-x-2 cursor-pointer p-2 rounded hover:bg-slate-100">
+                    <input type="checkbox" id="bias-toggle" class="h-4 w-4 rounded border-gray-300 text-sky-600 focus:ring-sky-500">
+                    <span>Bias Active</span>
+                </label>`;
+            
+            document.getElementById('bias-toggle').onchange = (e) => {
+                biasOn = e.target.checked;
+                bubble.visible = biasOn;
+            };
+
+            return {
+                update: () => {
+                    particles.forEach(p => {
+                        if (biasOn) {
+                            if (p.isConfirming) {
+                                const direction = new THREE.Vector3().subVectors(belief.position, p.position).normalize();
+                                p.velocity.add(direction.multiplyScalar(0.01));
+                            } else {
+                                const direction = new THREE.Vector3().subVectors(p.position, belief.position).normalize();
+                                p.velocity.add(direction.multiplyScalar(0.01));
+                            }
+                        } else {
+                            // Return to original position
+                            const direction = new THREE.Vector3().subVectors(p.originalPosition, p.position);
+                            p.velocity.add(direction.multiplyScalar(0.001));
+                        }
+                        p.position.add(p.velocity);
+                        p.velocity.multiplyScalar(0.95); // Damping
+                    });
+                },
+                cleanup: () => { particles.forEach(p => { group.remove(p); p.geometry.dispose(); }); confirmMaterial.dispose(); disconfirmMaterial.dispose(); }
+            };
+        }
+
+        function setupSunkCostVisual(scene, camera, renderer, controlsContainer, mount) {
+            camera.position.set(0, 2, 12);
+            const group = new THREE.Group();
+            scene.add(group);
+            addGenericControls(camera, group, mount);
+            scene.add(new THREE.AmbientLight(0xffffff, 0.8));
+
+            let effort = 0, capital = 0;
+            let projectFailed = false, projectSucceeded = false;
+            const blocks = [];
+            const effortGeom = new THREE.BoxGeometry(1, 0.5, 1);
+            const capitalGeom = new THREE.CylinderGeometry(0.5, 0.5, 0.5, 32);
+            const effortMat = new THREE.MeshStandardMaterial({ color: 0x22c55e });
+            const capitalMat = new THREE.MeshStandardMaterial({ color: 0x3b82f6 });
+            const sunkMat = new THREE.MeshStandardMaterial({ color: 0x64748b });
+
+            function updateState() {
+                if (projectFailed || projectSucceeded) return;
+
+                if ((effort >= 5 && capital < 4) || (capital >= 5 && effort < 4)) {
+                    projectFailed = true;
+                    document.getElementById('status-message').textContent = 'Failure: Unbalanced investment.';
+                    document.getElementById('status-message').className = 'font-semibold text-red-400';
+                    blocks.forEach(b => b.material = sunkMat);
+                } else if (effort >= 4 && capital >= 4) {
+                    projectSucceeded = true;
+                    document.getElementById('status-message').textContent = 'Success: Balanced investment paid off!';
+                    document.getElementById('status-message').className = 'font-semibold text-green-400';
+                }
+                document.getElementById('effort-count').textContent = effort;
+                document.getElementById('capital-count').textContent = capital;
+            }
+            
+            function investEffort() {
+                if (projectFailed || projectSucceeded) return;
+                effort++;
+                const block = new THREE.Mesh(effortGeom, effortMat);
+                block.position.set(-2.5, effort * 0.6 - 2, 0);
+                group.add(block);
+                blocks.push(block);
+                updateState();
+            }
+            
+            function investCapital() {
+                if (projectFailed || projectSucceeded) return;
+                capital++;
+                const block = new THREE.Mesh(capitalGeom, capitalMat);
+                block.position.set(2.5, capital * 0.6 - 2, 0);
+                group.add(block);
+                blocks.push(block);
+                updateState();
+            }
+
+            function reset() {
+                effort = 0; capital = 0;
+                projectFailed = false; projectSucceeded = false;
+                blocks.forEach(b => group.remove(b));
+                blocks.length = 0;
+                document.getElementById('status-message').textContent = 'Project is on track.';
+                document.getElementById('status-message').className = 'font-semibold text-slate-400';
+                updateState();
+            }
+
+            controlsContainer.innerHTML = `<h4 class="font-bold text-lg">Interactive Controls</h4><p class="text-sm text-slate-500">A project needs both effort and capital. An imbalance leads to failure.</p>
+                <button id="invest-effort-btn" class="cuboid-btn w-full">Invest Effort</button>
+                <button id="invest-capital-btn" class="cuboid-btn w-full">Invest Capital</button>
+                <button id="reset-btn" class="cuboid-btn w-full mt-4">Cut Losses & Reset</button>
+                <div class="text-sm space-y-1 mt-4">
+                    <p>Effort: <span id="effort-count" class="font-semibold">0</span></p>
+                    <p>Capital: <span id="capital-count" class="font-semibold">0</span></p>
+                    <p>Status: <span id="status-message" class="font-semibold text-slate-400">Awaiting investment.</span></p>
+                </div>`;
+            
+            document.getElementById('invest-effort-btn').onclick = investEffort;
+            document.getElementById('invest-capital-btn').onclick = investCapital;
+            document.getElementById('reset-btn').onclick = reset;
+
+            return { update: () => {}, cleanup: () => { blocks.forEach(b => { group.remove(b); b.geometry.dispose(); }); effortMat.dispose(); capitalMat.dispose(); sunkMat.dispose(); } };
+        }
+
+        function setupFirstPrinciplesVisual(scene, camera, renderer, controlsContainer, mount) {
+            camera.position.z = 15;
+            const group = new THREE.Group();
+            scene.add(group);
+            addGenericControls(camera, group, mount);
+            scene.add(new THREE.AmbientLight(0xffffff, 0.8));
+            const availableColors = [0xef4444, 0x3b82f6, 0x22c55e, 0xeab308, 0x8b5cf6, 0xec4899];
+            let colorIndex = 0;
+
+            const parts = [];
+            const partGeoms = [
+                new THREE.BoxGeometry(2, 2, 2),
+                new THREE.ConeGeometry(1.4, 3, 32),
+                new THREE.TorusGeometry(1.5, 0.4, 16, 100),
+                new THREE.SphereGeometry(1.2, 32, 32),
+                new THREE.CylinderGeometry(0.8, 0.8, 3, 32)
+            ];
+
+            function addPart() {
+                const geom = partGeoms[parts.length % partGeoms.length];
+                const mat = new THREE.MeshStandardMaterial({color: availableColors[colorIndex++ % availableColors.length]});
+                const part = new THREE.Mesh(geom, mat);
+                
+                part.assembledPosition = new THREE.Vector3( (parts.length % 3 -1) * 3, Math.floor(parts.length / 3) * 3 - 2, 0);
+                part.assembledRotation = new THREE.Euler(0,0,0);
+                part.position.copy(part.assembledPosition);
+                part.rotation.copy(part.assembledRotation);
+                part.targetPosition = part.position.clone();
+                part.targetRotation = part.rotation.clone();
+                parts.push(part);
+                group.add(part);
+            }
+            
+            addPart(); addPart(); addPart(); // Initial parts
+
+            function assemble() {
+                parts.forEach(p => {
+                    p.targetPosition.copy(p.assembledPosition);
+                    p.targetRotation.copy(p.assembledRotation);
+                });
+            }
+            
+            function deconstruct() {
+                parts.forEach(p => {
+                    p.targetPosition.set( (Math.random() - 0.5) * 10, (Math.random() - 0.5) * 10, (Math.random() - 0.5) * 10 );
+                    p.targetRotation.set( Math.random() * Math.PI, Math.random() * Math.PI, Math.random() * Math.PI );
+                });
+            }
+            
+            controlsContainer.innerHTML = `<h4 class="font-bold text-lg">Interactive Controls</h4><p class="text-sm text-slate-500">Break a problem into its parts, then re-assemble them.</p>
+                <button id="deconstruct-btn" class="w-full text-left p-2 rounded hover:bg-slate-100">Deconstruct</button>
+                <button id="assemble-btn" class="w-full text-left p-2 rounded hover:bg-slate-100">Re-assemble</button>
+                <button id="add-part-btn" class="w-full text-left p-2 rounded hover:bg-slate-100">Add Part</button>`;
+            
+            document.getElementById('deconstruct-btn').onclick = deconstruct;
+            document.getElementById('assemble-btn').onclick = assemble;
+            document.getElementById('add-part-btn').onclick = addPart;
+            
+            return {
+                update: () => {
+                    parts.forEach(p => {
+                        p.position.lerp(p.targetPosition, 0.05);
+                        p.rotation.x += (p.targetRotation.x - p.rotation.x) * 0.05;
+                        p.rotation.y += (p.targetRotation.y - p.rotation.y) * 0.05;
+                        p.rotation.z += (p.targetRotation.z - p.rotation.z) * 0.05;
+                    });
+                },
+                cleanup: () => { parts.forEach(p => { group.remove(p); p.geometry.dispose(); p.material.dispose(); }); }
+            };
+        }
+
+        // --- GENERAL EVENT LISTENERS ---
+
+        function handleSearch(query) {
+            const normalizedQuery = query.toLowerCase().trim();
+            let resultsFound = false;
+            document.querySelectorAll('.mosaic-tile').forEach(tileEl => {
+                const tileData = findTileById(tileEl.dataset.id);
+                const tileText = `${tileData.title} ${tileData.definition} ${tileData.application}`.toLowerCase();
+                if (tileText.includes(normalizedQuery)) {
+                    tileEl.style.display = 'block';
+                    resultsFound = true;
+                } else {
+                    tileEl.style.display = 'none';
+                }
+            });
+            document.querySelectorAll('#mosaic-canvas section').forEach(section => {
+                const visibleTiles = section.querySelectorAll('.mosaic-tile[style*="display: block"]');
+                section.style.display = visibleTiles.length === 0 ? 'none' : 'block';
+            });
+            noResultsDiv.classList.toggle('hidden', !resultsFound);
+            canvas.classList.toggle('hidden', !resultsFound);
+        }
+
+        function showDailySpark() {
+            const allTiles = mosaicData.flatMap(cat => cat.tiles);
+            const randomTile = allTiles[Math.floor(Math.random() * allTiles.length)];
+            const tileEl = document.querySelector(`.mosaic-tile[data-id="${randomTile.id}"]`);
+            if (tileEl) {
+                tileEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                tileEl.classList.add('sparkle');
+                setTimeout(() => tileEl.classList.remove('sparkle'), 1500);
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            renderMosaic(mosaicData);
+            
+            closeModalBtn.addEventListener('click', closeModal);
+            modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
+            document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !modal.classList.contains('hidden')) closeModal(); });
+
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.addEventListener('click', () => switchTab(btn.dataset.tab));
+            });
+
+            const reflectionTextarea = document.getElementById('reflection-textarea');
+            reflectionTextarea.addEventListener('input', () => {
+                if (currentTileId) {
+                    const questionIndex = reflectionTextarea.dataset.questionIndex;
+                    localStorage.setItem(`mosaic-reflection-${currentTileId}-${questionIndex}`, reflectionTextarea.value);
+                    const tileEl = document.querySelector(`.mosaic-tile[data-id="${currentTileId}"]`);
+                    if (tileEl && !tileEl.querySelector('i[data-lucide="notebook-pen"]')) {
+                        const iconContainer = tileEl.querySelector('.flex.items-center.space-x-2');
+                        iconContainer.insertAdjacentHTML('afterbegin', `<i data-lucide="notebook-pen" class="w-5 h-5 text-slate-500" title="You have a reflection saved."></i>`);
+                        lucide.createIcons();
+                    }
+                }
+            });
+
+            searchInput.addEventListener('input', (e) => handleSearch(e.target.value));
+            searchInputMobile.addEventListener('input', (e) => handleSearch(e.target.value));
+            dailySparkBtn.addEventListener('click', showDailySpark);
+        });
+    </script>
+</body>
+</html>
