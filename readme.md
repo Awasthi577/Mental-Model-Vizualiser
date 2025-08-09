@@ -41,23 +41,30 @@ This project is a Three.js-based 3D model viewer that loads multiple 3D models (
 
 ---
 
-## Example Code Snippet
+### Loading models with unique animations
 
-// Loading models with unique animations
+This code iterates through `modelData` to load 3D models and add them to the scene. Each model is positioned in a grid and assigned a unique rotation speed for its animation.
+
+```javascript
 modelData.forEach((model, i) => {
   loader.load(model.url, gltf => {
     const obj = gltf.scene;
+
+    // Position models in a 5x grid
     obj.position.set((i % 5) * 5, 0, Math.floor(i / 5) * 5);
     scene.add(obj);
 
-    const speed = 0.005 + Math.random() * 0.01; // unique speed
-    animations.push(() => { obj.rotation.y += speed; });
+    // Give each model a unique, random rotation speed
+    const speed = 0.005 + Math.random() * 0.01;
+    animations.push(() => {
+      obj.rotation.y += speed;
+    });
   });
 });
-
-
+```
 
 ## Model & Image URLs
+
 Edit the `modelData` array in `script.js` to add or change models:
 ```javascript
 const modelData = [
