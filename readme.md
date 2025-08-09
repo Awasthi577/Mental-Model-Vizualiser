@@ -37,17 +37,6 @@ This project is a Three.js-based 3D model viewer that loads multiple 3D models (
 
 ---
 
-## File Structure
-
-/project
-│── index.html # Main entry file
-│── script.js # Three.js logic
-│── style.css # Styling for UI
-│── README.md # This file
-
-
----
-
 ## Example Code Snippet
 
 // Loading models with unique animations
