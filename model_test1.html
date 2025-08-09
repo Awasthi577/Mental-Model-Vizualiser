@@ -1,0 +1,609 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Mental Models (3D Interactive Gallery)</title>
+  <style>
+    :root{
+      --bg:#071925; --card:#0f2a42; --muted:#9aa4b2; --accent:#7fffd4;
+      --panel:#071220;
+    }
+    *{box-sizing:border-box}
+    body{height:100%;margin:0;font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,'Helvetica Neue',Arial;background:linear-gradient(180deg,var(--bg) 0%, #031224 80%);color:var(--accent);padding:24px}
+    header{display:flex;align-items:center;gap:12px;margin-bottom:18px}
+    h1{font-size:20px;margin:0;color:var(--accent)}
+    .muted{color:var(--muted);font-size:13px}
+
+    /* Legend */
+    .legend{background:linear-gradient(180deg,rgba(255,255,255,0.02),transparent);padding:12px;border-radius:10px;border:1px solid rgba(255,255,255,0.03);margin-bottom:16px}
+    .legend h3{margin:0 0 6px 0;color:var(--accent);font-size:15px}
+    .legend p{margin:0;color:var(--muted);font-size:13px}
+
+    /* Grid of previews */
+    #models-container{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px}
+    .card{background:linear-gradient(180deg,rgba(255,255,255,0.02),transparent);border-radius:12px;padding:10px;border:1px solid rgba(255,255,255,0.03);cursor:pointer;transition:transform .14s ease,box-shadow .14s}
+    .card:hover{transform:translateY(-6px);box-shadow:0 12px 28px rgba(0,0,0,0.6)}
+    .thumb{width:100%;height:160px;border-radius:8px;overflow:hidden;background:#021018;display:flex;align-items:center;justify-content:center}
+    .meta{padding:10px}
+    .model-title{font-weight:700;margin-bottom:6px;color:var(--accent);font-size:15px}
+    .model-desc{color:var(--muted);font-size:13px}
+
+    /* Modal (fade in/out) */
+    .modal{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(2,6,23,0.0);z-index:999;pointer-events:none;opacity:0;transition:opacity .26s ease,background-color .26s ease}
+    .modal.show{pointer-events:auto;opacity:1;background:rgba(2,6,23,0.75)}
+    .panel{width:92%;max-width:1100px;background:var(--panel);border-radius:12px;padding:14px;border:1px solid rgba(255,255,255,0.03);display:grid;grid-template-columns:1fr 320px;gap:12px;transform:translateY(10px);transition:transform .26s ease}
+    .modal.show .panel{transform:translateY(0)}
+    .three-box{background:linear-gradient(180deg,rgba(255,255,255,0.015),transparent);border-radius:8px;min-height:520px;display:flex;align-items:center;justify-content:center;position:relative}
+    .three-box canvas{width:100%;height:100%;display:block;border-radius:8px}
+    .info{padding:8px;color:var(--muted)}
+    .control-row{display:flex;gap:8px;align-items:center;margin-top:10px}
+    button{background:transparent;border:1px solid rgba(255,255,255,0.06);padding:8px 10px;border-radius:8px;color:var(--accent);cursor:pointer}
+    input[type=range]{width:100%}
+    .close-btn{justify-self:end}
+    .legend-links{display:flex;gap:12px;flex-wrap:wrap;margin-top:8px}
+    .legend-links a{color:#c7fff1;text-decoration:underline;font-size:13px}
+
+    @media (max-width:980px){.panel{grid-template-columns:1fr}}
+  </style>
+
+  <!-- Three.js + OrbitControls -->
+  <script src="https://unpkg.com/three@0.128.0/build/three.min.js"></script>
+  <script src="https://unpkg.com/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+</head>
+<body>
+  <header>
+    <div>
+      <h1>Mental Models (3D Interactive Gallery)</h1>
+      <div class="muted">Use the previews to explore animations. Click to open a full view.</div>
+    </div>
+  </header>
+
+  <section class="legend" aria-label="How it works">
+    <h3>How it works</h3>
+    <p>
+      Each card contains a live low-res preview (lightweight canvas). Click a preview to open the full modal view (higher-quality canvas). Every modal uses its own Three.js scene and animation loop — they are independent and cleaned up when closed.
+    </p>
+    <div class="legend-links">
+      <a href="#" id="link-what">What do the controls do?</a>
+      <a href="#" id="link-performance">Performance tips</a>
+      <a href="#" id="link-colors">Customize colors</a>
+    </div>
+  </section>
+
+  <main>
+    <div id="models-container" role="list" aria-label="Models list"></div>
+  </main>
+
+  <!-- Modal -->
+  <div id="modal" class="modal" role="dialog" aria-modal="true" aria-hidden="true">
+    <div class="panel" role="document">
+      <div class="three-box" id="three-box"></div>
+
+      <aside class="info" aria-label="Model controls">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div>
+            <div id="panelTitle" style="font-weight:700;color:var(--accent)"></div>
+            <div id="panelSubtitle" class="muted" style="margin-top:6px;font-size:13px"></div>
+          </div>
+          <div>
+            <button id="closeModal" class="close-btn">Close</button>
+          </div>
+        </div>
+
+        <div id="panelDesc" style="margin-top:12px;color:var(--muted)"></div>
+
+        <div style="font-weight:700;margin-top:12px;color:var(--accent)">Interactive controls</div>
+        <div class="control-row">
+          <button id="playPause">Pause</button>
+          <label style="font-size:13px;color:var(--muted);margin-left:6px">Speed</label>
+        </div>
+        <div style="margin-top:8px">
+          <input id="speedRange" type="range" min="0" max="0.12" step="0.001" value="0.02" />
+        </div>
+
+        <div style="margin-top:10px">
+          <label style="font-size:13px;color:var(--muted)"><input id="showPath" type="checkbox" checked/> Show orbit path</label>
+        </div>
+
+        <div style="margin-top:10px">
+          <label style="font-size:13px;color:var(--muted)"><input id="pulseEmissive" type="checkbox" checked/> Pulse orbit glow</label>
+        </div>
+
+        <div style="margin-top:14px;color:var(--muted)">
+          Tip: drag to rotate, scroll to zoom, use controls to slow down or pause.
+        </div>
+      </aside>
+    </div>
+  </div>
+
+<script>
+(function(){
+  if (typeof THREE === 'undefined') {
+    document.body.innerHTML = '<div style="padding:24px;color:#f88;background:#200;">Three.js failed to load.</div>';
+    return;
+  }
+
+  /* ---------- config ---------- */
+  const MODEL_CONFIGS = {
+    'second-order': { title:'Second-Order Thinking', category:'Decision', desc:'Consider downstream consequences.', central:0xff7f50, orbit:0x87ceeb, anim:'orbit' },
+    'inversion':     { title:'Inversion', category:'Decision', desc:'Solve by thinking about failures.', central:0x8a2be2, orbit:0xffd700, anim:'flip' },
+    'ooda':          { title:'OODA Loop', category:'Strategy', desc:'Observe, Orient, Decide, Act.', central:0x2ecc71, orbit:0x3498db, anim:'torusOrbit' },
+    'feedback':      { title:'Feedback Loop', category:'Systems', desc:'Reinforcing vs balancing cycles.', central:0x1abc9c, orbit:0xff6b6b, anim:'linkedSpin' },
+    'bottleneck':    { title:'Bottleneck Analysis', category:'Systems', desc:'Find and widen the constraint.', central:0x34495e, orbit:0x7fffd4, anim:'squeeze' },
+    'barbell':       { title:'Barbell Strategy', category:'Risk', desc:'Safe core + risky edges.', central:0xf39c12, orbit:0x9b59b6, anim:'rock' }
+  };
+
+  const MODELS = Object.keys(MODEL_CONFIGS);
+
+  /* ---------- UI refs ---------- */
+  const container = document.getElementById('models-container');
+  const modal = document.getElementById('modal');
+  const threeBox = document.getElementById('three-box');
+  const panelTitle = document.getElementById('panelTitle');
+  const panelSubtitle = document.getElementById('panelSubtitle');
+  const panelDesc = document.getElementById('panelDesc');
+  const playPauseBtn = document.getElementById('playPause');
+  const speedRange = document.getElementById('speedRange');
+  const showPathCheck = document.getElementById('showPath');
+  const pulseEmissiveCheck = document.getElementById('pulseEmissive');
+  const closeModalBtn = document.getElementById('closeModal');
+
+  // legend links
+  document.getElementById('link-what').addEventListener('click', e=>{
+    e.preventDefault();
+    alert('Controls:\n- Pause: pause/resume animation\n- Speed: adjust animation speed\n- Show orbit path: toggle orbit ring\n- Pulse orbit glow: toggle small sphere pulsing');
+  });
+  document.getElementById('link-performance').addEventListener('click', e=>{
+    e.preventDefault();
+    alert('Performance tips:\n- Close modals when not in use\n- Reduce Speed to lower CPU/GPU usage\n- On mobile, canvas quality is reduced for previews automatically.');
+  });
+  document.getElementById('link-colors').addEventListener('click', e=>{
+    e.preventDefault();
+    alert('Colors are defined in MODEL_CONFIGS. Edit hex numbers there to customize palettes.');
+  });
+
+  /* ---------- lightweight preview + full renderer classes ---------- */
+
+  // PreviewRenderer is optimized for low-res previews in the grid
+  function PreviewRenderer(canvas, cfg) {
+    this.canvas = canvas;
+    this.cfg = cfg;
+    this.renderer = null;
+    this.scene = null;
+    this.camera = null;
+    this.rafId = null;
+    this.visuals = {};
+    this.angle = Math.random()*Math.PI*2;
+    this.speed = 0.01; // preview fixed speed
+    this.pulse = true;
+
+    this.start = start.bind(this);
+    this.dispose = dispose.bind(this);
+
+    function init() {
+      // intentionally low DPR for previews
+      this.renderer = new THREE.WebGLRenderer({ canvas: this.canvas, antialias: true, alpha: true });
+      this.renderer.setPixelRatio(1); // keep preview cheap
+      resize();
+      if (THREE.sRGBEncoding) this.renderer.outputEncoding = THREE.sRGBEncoding;
+
+      this.scene = new THREE.Scene();
+      this.scene.background = new THREE.Color(0x071220);
+
+      this.camera = new THREE.PerspectiveCamera(60, this.canvas.clientWidth / this.canvas.clientHeight, 0.1, 1000);
+      this.camera.position.set(2.5, 1.8, 4);
+
+      const ambient = new THREE.AmbientLight(0xffffff, 0.6);
+      const dir = new THREE.DirectionalLight(0xffffff, 0.4);
+      dir.position.set(5,8,6);
+      this.scene.add(ambient, dir);
+
+      // create a simplified visual based on anim type
+      const centralMat = new THREE.MeshBasicMaterial({ color: cfg.central }); // preview uses basic material (no lighting)
+      const childMat = new THREE.MeshBasicMaterial({ color: cfg.orbit });
+
+      if (cfg.anim === 'orbit') {
+        const central = new THREE.Mesh(new THREE.SphereGeometry(0.7, 12, 12), centralMat);
+        const child = new THREE.Mesh(new THREE.SphereGeometry(0.18, 8, 8), childMat);
+        this.scene.add(central, child);
+        this.visuals = { central, child, orbitRadius:1.6 };
+      } else if (cfg.anim === 'flip') {
+        const cone = new THREE.Mesh(new THREE.ConeGeometry(0.9,1.8,16), centralMat);
+        cone.rotation.x = Math.PI;
+        const marker = new THREE.Mesh(new THREE.SphereGeometry(0.12,8,8), childMat);
+        marker.position.set(0,-0.8,0);
+        this.scene.add(cone, marker);
+        this.visuals = { cone, marker };
+      } else if (cfg.anim === 'torusOrbit') {
+        const torus = new THREE.Mesh(new THREE.TorusGeometry(1.1,0.06,8,40), centralMat);
+        const orb = new THREE.Mesh(new THREE.SphereGeometry(0.14,8,8), childMat);
+        this.scene.add(torus, orb);
+        this.visuals = { torus, orb, orbitRadius:1.6 };
+      } else if (cfg.anim === 'linkedSpin') {
+        const a = new THREE.Mesh(new THREE.SphereGeometry(0.4,12,12), centralMat);
+        const b = new THREE.Mesh(new THREE.SphereGeometry(0.28,10,10), childMat);
+        a.position.set(-0.9,0,0); b.position.set(0.9,0,0);
+        this.scene.add(a,b);
+        this.visuals = { a,b };
+      } else if (cfg.anim === 'squeeze') {
+        const pipe = new THREE.Mesh(new THREE.BoxGeometry(3.2,0.5,1.0), new THREE.MeshBasicMaterial({color:0x123040}));
+        const narrow = new THREE.Mesh(new THREE.BoxGeometry(0.6,0.6,1), childMat);
+        this.scene.add(pipe, narrow);
+        this.visuals = { pipe, narrow };
+      } else if (cfg.anim === 'rock') {
+        const left = new THREE.Mesh(new THREE.BoxGeometry(0.6,1.0,0.6), centralMat);
+        const right = new THREE.Mesh(new THREE.BoxGeometry(0.6,1.2,0.6), childMat);
+        left.position.set(-1.1,0,0); right.position.set(1.1,0,0);
+        this.scene.add(left,right);
+        this.visuals = { left,right };
+      } else {
+        const central = new THREE.Mesh(new THREE.SphereGeometry(0.7,12,12), centralMat);
+        const child = new THREE.Mesh(new THREE.SphereGeometry(0.18,8,8), childMat);
+        this.scene.add(central, child);
+        this.visuals = { central, child, orbitRadius:1.6 };
+      }
+    }
+
+    function animate() {
+      this.rafId = requestAnimationFrame(animate.bind(this));
+      const t = performance.now()*0.001;
+      if (this.cfg.anim === 'orbit' && this.visuals.child) {
+        this.angle += this.speed;
+        const x = this.visuals.orbitRadius * Math.cos(this.angle);
+        const z = this.visuals.orbitRadius * Math.sin(this.angle);
+        this.visuals.child.position.set(x,0,z);
+        this.visuals.central.rotation.y += 0.01;
+      } else if (this.cfg.anim === 'flip' && this.visuals.cone) {
+        this.visuals.cone.rotation.z = Math.sin(t*0.8)*0.6;
+      } else if (this.cfg.anim === 'torusOrbit' && this.visuals.torus) {
+        this.visuals.torus.rotation.y += 0.01;
+        const x = (this.visuals.orbitRadius||1.6) * Math.cos(this.angle);
+        const z = (this.visuals.orbitRadius||1.6) * Math.sin(this.angle);
+        if (this.visuals.orb) this.visuals.orb.position.set(x,0,z);
+        this.angle += 0.01;
+      } else if (this.cfg.anim === 'linkedSpin' && this.visuals.a) {
+        this.visuals.a.rotation.y += 0.01; this.visuals.b.rotation.y -= 0.012;
+      } else if (this.cfg.anim === 'squeeze' && this.visuals.narrow) {
+        this.visuals.narrow.scale.x = 1 + 0.15*Math.sin(t*3.0);
+      } else if (this.cfg.anim === 'rock' && this.visuals.left) {
+        const r = 0.05*Math.sin(t*3.0);
+        this.visuals.left.rotation.z = r; this.visuals.right.rotation.z = -r;
+      } else {
+        if (this.visuals.central) this.visuals.central.rotation.y += 0.01;
+      }
+      if (this.renderer && this.scene && this.camera) this.renderer.render(this.scene, this.camera);
+    }
+
+    function resize() {
+      if (!this.renderer) return;
+      const width = this.canvas.clientWidth || 240;
+      const height = this.canvas.clientHeight || 160;
+      this.renderer.setSize(width, height, false);
+      if (this.camera) { this.camera.aspect = width/height; this.camera.updateProjectionMatrix(); }
+    }
+
+    function start(){ init.call(this); animate.call(this); window.addEventListener('resize', () => resize.call(this)); }
+    function dispose(){
+      if (this.rafId) cancelAnimationFrame(this.rafId);
+      // dispose scene objects
+      if (this.scene) {
+        this.scene.traverse(c => {
+          if (c.geometry) try{ c.geometry.dispose(); }catch(e){}
+          if (c.material) try{ Array.isArray(c.material) ? c.material.forEach(m=>m.dispose()) : c.material.dispose(); }catch(e){}
+        });
+      }
+      try{ this.renderer && this.renderer.dispose(); }catch(e){}
+      this.scene = null; this.renderer = null;
+    }
+
+    init = init; animate = animate; resize = resize; start = start; dispose = dispose;
+  }
+
+  // Full quality renderer used inside modal (re-uses previous ModelRenderer behavior)
+  function FullRenderer(canvas, cfg) {
+    this.canvas = canvas;
+    this.cfg = cfg;
+    this.renderer = null;
+    this.scene = null;
+    this.camera = null;
+    this.controls = null;
+    this.rafId = null;
+    this.visualGroup = null;
+    this.isPaused = false;
+    this.angle = Math.random()*2*Math.PI;
+    this.speed = parseFloat(speedRange.value) || 0.02;
+    this.pulse = true;
+    this.visuals = {};
+
+    this.start = start.bind(this);
+    this.dispose = dispose.bind(this);
+    this.togglePause = togglePause.bind(this);
+    this.setSpeed = setSpeed.bind(this);
+    this.showPath = showPath.bind(this);
+    this.setPulse = setPulse.bind(this);
+
+    function init() {
+      this.renderer = new THREE.WebGLRenderer({ canvas: this.canvas, antialias: true, alpha: true });
+      this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+      resize.call(this);
+      if (THREE.sRGBEncoding) this.renderer.outputEncoding = THREE.sRGBEncoding;
+
+      this.scene = new THREE.Scene();
+      this.scene.background = new THREE.Color(0x071220);
+
+      const w = Math.max(600, this.canvas.clientWidth || 800);
+      const h = Math.max(360, this.canvas.clientHeight || 520);
+      this.camera = new THREE.PerspectiveCamera(60, w/h, 0.1, 1000);
+      this.camera.position.set(3,2.2,5);
+
+      const ambient = new THREE.AmbientLight(0xffffff, 0.7);
+      const dir = new THREE.DirectionalLight(0xffffff, 0.5);
+      dir.position.set(5,10,7);
+      this.scene.add(ambient, dir);
+
+      try{ this.controls = new THREE.OrbitControls(this.camera, this.renderer.domElement); this.controls.enableDamping = true; this.controls.dampingFactor = 0.08; }catch(e){ this.controls = null; }
+
+      this.visualGroup = new THREE.Group();
+      this.scene.add(this.visualGroup);
+
+      createVisuals.call(this, this.cfg);
+
+      this.boundResize = resize.bind(this);
+      window.addEventListener('resize', this.boundResize);
+    }
+
+    function createVisuals(cfg){
+      // clear
+      if (this.visualGroup) {
+        this.visualGroup.traverse(c=>{ if (c.geometry) try{ c.geometry.dispose(); }catch(e){}; if (c.material) try{ Array.isArray(c.material) ? c.material.forEach(m=>m.dispose()) : c.material.dispose(); }catch(e){}; });
+        while(this.visualGroup.children.length) this.visualGroup.remove(this.visualGroup.children[0]);
+      }
+
+      const centralMat = new THREE.MeshStandardMaterial({ color: cfg.central, metalness:0.25, roughness:0.45, emissive:0x000000, emissiveIntensity:0.02 });
+      const childMat = new THREE.MeshStandardMaterial({ color: cfg.orbit, metalness:0.15, roughness:0.35, emissive: cfg.orbit, emissiveIntensity:0.18 });
+
+      if (cfg.anim === 'orbit') {
+        const central = new THREE.Mesh(new THREE.SphereGeometry(1.0,48,32), centralMat);
+        const child = new THREE.Mesh(new THREE.SphereGeometry(0.28,32,24), childMat);
+        this.visualGroup.add(central, child);
+        this.visuals = { central, child, orbitRadius: 2.2 };
+        addOrbitLine.call(this, 2.2);
+      } else if (cfg.anim === 'flip') {
+        const coneMat = new THREE.MeshStandardMaterial({ color: cfg.central, metalness:0.2, roughness:0.4, emissive:0x111111, emissiveIntensity:0.04 });
+        const cone = new THREE.Mesh(new THREE.ConeGeometry(1.2,2.4,32), coneMat);
+        cone.rotation.x = Math.PI;
+        const marker = new THREE.Mesh(new THREE.SphereGeometry(0.18,24,18), childMat);
+        marker.position.set(0,-1.2,0);
+        this.visualGroup.add(cone, marker);
+        this.visuals = { cone, marker };
+        addOrbitLine.call(this, 2.2);
+      } else if (cfg.anim === 'torusOrbit') {
+        const torus = new THREE.Mesh(new THREE.TorusGeometry(1.6,0.08,16,100), new THREE.MeshStandardMaterial({ color: cfg.central, metalness:0.2, roughness:0.5 }));
+        const orb = new THREE.Mesh(new THREE.SphereGeometry(0.22,24,18), childMat);
+        this.visualGroup.add(torus, orb);
+        this.visuals = { torus, orb, orbitRadius: 2.0 };
+        addOrbitLine.call(this, 2.0);
+      } else if (cfg.anim === 'linkedSpin') {
+        const A = new THREE.Mesh(new THREE.SphereGeometry(0.6,32,24), new THREE.MeshStandardMaterial({ color: cfg.central, emissive:0x001a16, emissiveIntensity:0.02 }));
+        const B = new THREE.Mesh(new THREE.SphereGeometry(0.4,24,18), childMat);
+        A.position.set(-1.2,0,0); B.position.set(1.2,0,0);
+        this.visualGroup.add(A, B);
+        this.visuals = { a:A, b:B, spinSpeed: 0.012 };
+        addOrbitLine.call(this, 1.2);
+      } else if (cfg.anim === 'squeeze') {
+        const pipe = new THREE.Mesh(new THREE.BoxGeometry(5,0.8,1.6), new THREE.MeshStandardMaterial({ color: 0x1f3a57 }));
+        const narrow = new THREE.Mesh(new THREE.BoxGeometry(1.0,0.9,1.6), new THREE.MeshStandardMaterial({ color: cfg.orbit, emissive: cfg.orbit, emissiveIntensity:0.12 }));
+        narrow.position.set(0,0,0);
+        this.visualGroup.add(pipe, narrow);
+        this.visuals = { pipe, narrow, squeezeSpeed: 0.025 };
+      } else if (cfg.anim === 'rock') {
+        const left = new THREE.Mesh(new THREE.BoxGeometry(0.9,1.6,0.9), new THREE.MeshStandardMaterial({ color: cfg.central }));
+        const right = new THREE.Mesh(new THREE.BoxGeometry(0.9,2.2,0.9), new THREE.MeshStandardMaterial({ color: cfg.orbit, emissive: cfg.orbit, emissiveIntensity:0.12 }));
+        left.position.set(-2.2,0,0); right.position.set(2.2,0,0);
+        this.visualGroup.add(left, right);
+        this.visuals = { left, right, rockSpeed: 0.015 };
+      } else {
+        const central = new THREE.Mesh(new THREE.SphereGeometry(1.0,48,32), centralMat);
+        const child = new THREE.Mesh(new THREE.SphereGeometry(0.28,32,24), childMat);
+        this.visualGroup.add(central, child);
+        this.visuals = { central, child, orbitRadius: 2.2 };
+        addOrbitLine.call(this, 2.2);
+      }
+    }
+
+    function addOrbitLine(radius) {
+      const pts = [];
+      const seg = 96;
+      for (let i=0;i<=seg;i++){
+        const a = (i/seg)*Math.PI*2;
+        pts.push(new THREE.Vector3(Math.cos(a)*radius, 0, Math.sin(a)*radius));
+      }
+      const geom = new THREE.BufferGeometry().setFromPoints(pts);
+      this.orbitLine = new THREE.LineLoop(geom, new THREE.LineBasicMaterial({ color:0x5ee7d6 }));
+      this.orbitLine.visible = showPathCheck.checked;
+      this.visualGroup.add(this.orbitLine);
+    }
+
+    function animate() {
+      this.rafId = requestAnimationFrame(animate.bind(this));
+      const t = performance.now()*0.001;
+      if (this.pulse && this.visuals && this.visuals.child && this.visuals.child.material) {
+        const p = 0.5 + 0.5*Math.sin(t*2.0);
+        this.visuals.child.material.emissiveIntensity = 0.08 + 0.22*p;
+      }
+
+      if (!this.isPaused) {
+        const anim = this.cfg.anim;
+        if (anim === 'orbit' && this.visuals.child) {
+          this.angle += this.speed;
+          const x = this.visuals.orbitRadius * Math.cos(this.angle);
+          const z = this.visuals.orbitRadius * Math.sin(this.angle);
+          this.visuals.child.position.set(x,0,z);
+          this.visuals.central.rotation.y += this.speed*0.2;
+        } else if (anim === 'flip' && this.visuals.cone) {
+          this.visuals.cone.rotation.z = Math.sin(t * 0.8) * 0.9;
+          if (this.visuals.marker) this.visuals.marker.position.y = -1.2 + 0.06*Math.sin(t*3.0);
+        } else if (anim === 'torusOrbit' && this.visuals.torus) {
+          this.visuals.torus.rotation.y += this.speed * 0.6;
+          this.angle += this.speed*1.2;
+          const x = this.visuals.orbitRadius * Math.cos(this.angle);
+          const z = this.visuals.orbitRadius * Math.sin(this.angle);
+          if (this.visuals.orb) this.visuals.orb.position.set(x,0,z);
+        } else if (anim === 'linkedSpin' && this.visuals.a) {
+          this.visuals.a.rotation.y += this.visuals.spinSpeed * this.speed * 2.0;
+          this.visuals.b.rotation.y -= this.visuals.spinSpeed * this.speed * 2.0;
+          const s = 1 + 0.06*Math.sin(t*3.0);
+          this.visuals.b.scale.set(s,s,s);
+        } else if (anim === 'squeeze' && this.visuals.narrow) {
+          this.visuals.narrow.scale.x = 1 + 0.25*Math.sin(t * this.visuals.squeezeSpeed * 20) * this.speed*5;
+        } else if (anim === 'rock' && this.visuals.left) {
+          const r = 0.06*Math.sin(t * this.visuals.rockSpeed * 40 * this.speed*3);
+          this.visuals.left.rotation.z = r;
+          this.visuals.right.rotation.z = -r;
+        } else {
+          if (this.visuals.central) this.visuals.central.rotation.y += this.speed*0.2;
+        }
+      }
+
+      if (this.controls && this.controls.update) this.controls.update();
+      if (this.renderer && this.scene && this.camera) this.renderer.render(this.scene, this.camera);
+    }
+
+    function resize() {
+      if (!this.renderer) return;
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      const width = Math.max(400, this.canvas.clientWidth || 600);
+      const height = Math.max(300, this.canvas.clientHeight || 400);
+      const need = this.canvas.width !== Math.floor(width * dpr) || this.canvas.height !== Math.floor(height * dpr);
+      if (need) {
+        this.renderer.setSize(width, height, false);
+        if (this.camera) { this.camera.aspect = width/height; this.camera.updateProjectionMatrix(); }
+      }
+    }
+
+    function start(){ init.call(this); animate.call(this); }
+    function dispose(){
+      if (this.rafId) cancelAnimationFrame(this.rafId);
+      window.removeEventListener('resize', this.boundResize);
+      if (this.visualGroup) {
+        this.visualGroup.traverse(c=>{ if (c.geometry) try{ c.geometry.dispose(); }catch(e){}; if (c.material) try{ Array.isArray(c.material)? c.material.forEach(m=>m.dispose()): c.material.dispose(); }catch(e){}; });
+        while(this.visualGroup.children.length) this.visualGroup.remove(this.visualGroup.children[0]);
+      }
+      if (this.controls){ try{ this.controls.dispose(); }catch(e){} this.controls = null; }
+      if (this.renderer) { try { this.renderer.forceContextLoss && this.renderer.forceContextLoss(); this.renderer.dispose(); } catch(e) {} this.renderer = null; }
+      this.scene = null; this.camera = null;
+    }
+    function togglePause(){ this.isPaused = !this.isPaused; }
+    function setSpeed(v){ this.speed = v; }
+    function showPath(visible){ if (this.orbitLine) this.orbitLine.visible = visible; }
+    function setPulse(val){ this.pulse = !!val; }
+
+    init.call(this);
+  }
+
+  /* ---------- lifecycle: create previews, click to open full modal ---------- */
+
+  const previews = {}; // id -> {renderer, canvas}
+  const fullView = { renderer: null, canvas: null };
+
+  function createCard(id) {
+    const cfg = MODEL_CONFIGS[id];
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.tabIndex = 0;
+    // thumbnail container with canvas
+    const thumb = document.createElement('div'); thumb.className = 'thumb';
+    const canvas = document.createElement('canvas');
+    canvas.style.width = '100%'; canvas.style.height = '100%';
+    thumb.appendChild(canvas);
+    // meta
+    const meta = document.createElement('div'); meta.className = 'meta';
+    meta.innerHTML = `<div class="model-title">${cfg.title}</div><div class="model-desc">${cfg.anim} — ${cfg.desc}</div>`;
+    card.appendChild(thumb); card.appendChild(meta);
+
+    card.addEventListener('click', () => openModalFor(id));
+    card.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') openModalFor(id); });
+
+    // attach preview renderer
+    const preview = new PreviewRenderer(canvas, cfg);
+    preview.start();
+    previews[id] = preview;
+
+    return card;
+  }
+
+  // populate grid
+  MODELS.forEach(id => container.appendChild(createCard(id)));
+
+  function openModalFor(id) {
+    const cfg = MODEL_CONFIGS[id];
+    panelTitle.textContent = cfg.title;
+    panelSubtitle.textContent = cfg.category;
+    panelDesc.textContent = cfg.desc;
+    modal.classList.add('show');
+    modal.setAttribute('aria-hidden', 'false');
+
+    // create full-canvas
+    threeBox.innerHTML = '';
+    const canvas = document.createElement('canvas');
+    canvas.style.width = '100%'; canvas.style.height = '100%';
+    threeBox.appendChild(canvas);
+
+    // dispose any existing full renderer
+    if (fullView.renderer) { fullView.renderer.dispose(); fullView.renderer = null; fullView.canvas = null; }
+
+    // pause preview while modal open (optional)
+    if (previews[id]) { previews[id].dispose(); delete previews[id]; } // free preview to reduce GPU usage
+
+    const fr = new FullRenderer(canvas, cfg);
+    fullView.renderer = fr; fullView.canvas = canvas;
+    fr.start();
+
+    // ensure controls UI reflect current fr state
+    playPauseBtn.textContent = fr.isPaused ? 'Play' : 'Pause';
+  }
+
+  function closeModal() {
+    modal.classList.remove('show');
+    modal.setAttribute('aria-hidden', 'true');
+    if (fullView.renderer) { fullView.renderer.dispose(); fullView.renderer = null; }
+    threeBox.innerHTML = '';
+
+    // recreate previews if they were disposed (lightweight)
+    // clear current grid and recreate (simple approach)
+    container.innerHTML = '';
+    Object.keys(MODEL_CONFIGS).forEach(id => container.appendChild(createCard(id)));
+  }
+
+  closeModalBtn.addEventListener('click', closeModal);
+  modal.addEventListener('click', (ev) => { if (ev.target === modal) closeModal(); });
+
+  // control hooks operate on fullView.renderer
+  playPauseBtn.addEventListener('click', () => {
+    if (!fullView.renderer) return;
+    fullView.renderer.togglePause();
+    playPauseBtn.textContent = fullView.renderer.isPaused ? 'Play' : 'Pause';
+  });
+  speedRange.addEventListener('input', (e) => {
+    if (!fullView.renderer) return;
+    fullView.renderer.setSpeed(parseFloat(e.target.value));
+  });
+  showPathCheck.addEventListener('change', () => {
+    if (!fullView.renderer) return;
+    fullView.renderer.showPath(showPathCheck.checked);
+  });
+  pulseEmissiveCheck.addEventListener('change', () => {
+    if (!fullView.renderer) return;
+    fullView.renderer.setPulse(pulseEmissiveCheck.checked);
+  });
+
+  // accessibility: close with ESC
+  window.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && modal.classList.contains('show')) closeModal();
+  });
+
+})();
+</script>
+</body>
+</html>
