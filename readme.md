@@ -4,7 +4,7 @@ Axion is an interactive, browser-based application designed to help you understa
 
 ---
 
-## Preview
+## Preview Video
 A brief demonstration of the interactive features in Axion.
 
 [![Watch the Preview Video](https://github.com/Awasthi577/Mental-Model-Vizualiser/blob/Assets/Axion_Image.jpg?raw=true)](https://drive.google.com/file/d/1kAx4vTDKnkxprU3JUIylP7abMbOaCZOJ/view?usp=sharing)
