@@ -15,7 +15,7 @@ A brief demonstration of the interactive features in Axion.
 ## Features
 
 - **Interactive 3D Visualizations**: Explore concepts like *Inversion*, *Sunk Cost Fallacy*, and more with hands-on 3D models.  
-- **AI-Powered Examples**: Use the “Ask Axion” feature (powered by the Gemini API) to get unlimited, context-specific examples for any model.  
+- **AI-Powered Examples**: Use the “Ask Axion” feature to get unlimited, context-specific examples for any model.  
 - **Dynamic Reflection System**: Receive new journaling prompts each time you visit a concept and keep a history of your thoughts.  
 - **360° View & Zoom**: All visualizations include full camera controls (drag to rotate, scroll to zoom).  
 - **Self-Contained**: Runs entirely in the browser from a single HTML file. No installation or dependencies are required.  
